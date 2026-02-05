@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyCondition - 体調・気分可視化</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+        }
+
+        /* アニメーション定義 */
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fade-in-down {
+            from { opacity: 0; transform: translate(-50%, -20px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.3s ease-out forwards;
+        }
+        .animate-fade-in-down {
+            animation: fade-in-down 0.3s ease-out forwards;
+        }
+
+        /* カスタムスクロールバー非表示など */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans pb-10 min-h-screen">
+
+    <!-- ヘッダー -->
+    <header class="bg-white shadow-sm sticky top-0 z-10">
+        <div class="max-w-md mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i data-lucide="activity" class="text-blue-600"></i>
+                <h1 class="text-xl font-bold text-gray-800">MyCondition</h1>
+            </div>
+            <button onclick="toggleSettings(true)" class="p-2 text-gray-500 hover:bg-blue-50 hover:text-blue-600 rounded-full transition-all relative group" aria-label="設定">
+                <i data-lucide="settings" width="22" height="22"></i>
+                <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></span>
+            </button>
+        </div>
+    </header>
+
+    <main class="max-w-md mx-auto px-4 py-6 space-y-6">
+        
+        <!-- 通知 -->
+        <div id="notification" class="fixed top-24 left-1/2 transform -translate-x-1/2 bg-gray-800/90 backdrop-blur text-white px-6 py-3 rounded-full shadow-lg z-50 transition-all hidden flex items-center">
+            <i data-lucide="check-circle" class="mr-2 text-green-400" width="18" height="18"></i>
+            <span id="notification-text">記録しました！</span>
+        </div>
+
+        <!-- 設定モーダル -->
+        <div id="settings-modal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm hidden animate-fade-in">
+            <div class="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-xl font-bold text-gray-800 flex items-center">
+                        <i data-lucide="settings" class="mr-2 text-blue-600" width="24" height="24"></i>
+                        標準値の設定
+                    </h3>
+                    <button onclick="toggleSettings(false)" class="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                        <i data-lucide="x" class="text-gray-500" width="24" height="24"></i>
+                    </button>
+                </div>
+                
+                <div class="bg-blue-50 p-4 rounded-xl mb-6 flex items-start">
+                    <i data-lucide="info" class="text-blue-600 mr-2 flex-shrink-0 mt-0.5" width="20" height="20"></i>
+                    <p class="text-sm text-blue-800">
+                        あなたの「いつもの状態」を設定してください。これを基準（50点相当）として、日々の変化を表示します。
+                    </p>
+                </div>
+
+                <!-- 設定フォーム -->
+                <div id="settings-form">
+                    <!-- JSでレンダリング -->
+                </div>
+
+                <div class="mt-8 flex space-x-3">
+                    <button onclick="toggleSettings(false)" class="flex-1 py-3 border-2 border-gray-200 rounded-xl font-bold text-gray-500 hover:bg-gray-50 transition-colors">
+                        キャンセル
+                    </button>
+                    <button onclick="saveBaselineSettings()" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 hover:shadow-xl transition-all flex items-center justify-center transform active:scale-95">
+                        <i data-lucide="check-circle" class="mr-2" width="18" height="18"></i>
+                        設定を保存
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- タブ切り替え -->
+        <div class="flex p-1 bg-gray-200 rounded-xl">
+            <button onclick="switchTab('input')" id="tab-input" class="flex-1 py-2 text-sm font-bold rounded-lg transition-all bg-white shadow text-blue-600">
+                入力・診断
+            </button>
+            <button onclick="switchTab('history')" id="tab-history" class="flex-1 py-2 text-sm font-bold rounded-lg transition-all text-gray-500 hover:text-gray-700">
+                履歴・グラフ
+            </button>
+        </div>
+
+        <!-- 入力タブコンテンツ -->
+        <div id="content-input" class="space-y-6 animate-fade-in block">
+            <!-- メインスコア表示カード -->
+            <div id="score-card" class="relative overflow-hidden rounded-3xl p-6 shadow-sm border transition-colors duration-500 text-gray-800 bg-gray-100">
+                <div class="absolute top-0 right-0 p-4 opacity-10">
+                    <i data-lucide="activity" width="120" height="120"></i>
+                </div>
+                
+                <div class="relative z-10 text-center space-y-2">
+                    <div class="flex justify-between items-center bg-white/40 rounded-xl p-2 mb-2 backdrop-blur-sm border border-white/50">
+                        <span class="text-xs font-bold text-gray-600 uppercase tracking-wider pl-2">あなたの標準</span>
+                        <div class="flex items-center text-sm font-bold text-gray-700">
+                            <span id="display-baseline-score" class="text-xl mr-1">50</span>
+                            <span class="text-xs text-gray-500 pt-1">/100</span>
+                        </div>
+                    </div>
+
+                    <div class="py-2">
+                        <div class="flex justify-center items-center space-x-2 mb-1">
+                            <span class="text-sm font-bold text-gray-500">現在</span>
+                            <span id="display-current-score" class="text-6xl font-bold tracking-tighter">50</span>
+                        </div>
+                        
+                        <!-- 差分表示バッジ -->
+                        <div id="score-diff-badge" class="inline-flex items-center px-4 py-1.5 rounded-full font-bold shadow-sm backdrop-blur-md border border-white/60 bg-gray-100/80 text-gray-700">
+                            <span id="diff-icon-container" class="mr-1.5 flex items-center"></span>
+                            <span id="score-diff-text">いつも通り (±0)</span>
+                        </div>
+                    </div>
+                    
+                    <div id="display-face" class="text-6xl py-2 filter drop-shadow-sm transition-transform hover:scale-110 cursor-default">
+                        🙂
+                    </div>
+                    
+                    <!-- ゲージ可視化 -->
+                    <div class="relative pt-6 pb-2">
+                        <!-- バー背景 -->
+                        <div class="h-3 w-full bg-gray-200/50 rounded-full overflow-hidden relative">
+                            <!-- 現在値バー -->
+                            <div id="score-bar" class="absolute top-0 left-0 h-full transition-all duration-500 ease-out bg-blue-500" style="width: 50%"></div>
+                        </div>
+                        
+                        <!-- 標準値マーカー -->
+                        <div id="baseline-marker" class="absolute top-4 w-1 h-7 bg-gray-800 z-20 rounded-full shadow transition-all duration-500" style="left: 50%; transform: translateX(-50%)">
+                            <div class="absolute -top-6 left-1/2 transform -translate-x-1/2 text-[10px] font-bold text-gray-600 bg-white px-1.5 py-0.5 rounded border shadow-sm whitespace-nowrap">
+                                標準
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-between text-[10px] font-bold text-gray-400 mt-2 px-1">
+                            <span>0</span>
+                            <span>50</span>
+                            <span>100</span>
+                        </div>
+                    </div>
+
+                    <p id="advice-text" class="text-sm font-medium pt-3 mt-2 border-t border-black/10">
+                        アドバイスを表示...
+                    </p>
+                </div>
+            </div>
+
+            <!-- 入力フォーム -->
+            <div class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-lg font-bold flex items-center text-gray-800">
+                        <i data-lucide="info" class="mr-2 text-blue-500" width="20" height="20"></i>
+                        今の状態
+                    </h2>
+                    <button onclick="toggleSettings(true)" class="text-xs font-medium text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-full transition-colors flex items-center">
+                        <i data-lucide="settings" class="mr-1" width="12" height="12"></i>
+                        標準値: <span id="form-baseline-score">50</span>
+                    </button>
+                </div>
+                
+                <div id="main-input-form">
+                    <!-- JSでレンダリング -->
+                </div>
+
+                <button onclick="saveCurrentState()" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-95 flex items-center justify-center space-x-2">
+                    <i data-lucide="save" width="20" height="20"></i>
+                    <span>今の状態を記録する</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 履歴タブコンテンツ -->
+        <div id="content-history" class="space-y-6 animate-fade-in hidden">
+            <!-- グラフエリア -->
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h2 class="text-lg font-bold mb-4 flex items-center text-gray-800">
+                    <i data-lucide="trending-up" class="mr-2 text-blue-500" width="20" height="20"></i>
+                    調子の推移 (最新10件)
+                </h2>
+                
+                <div id="graph-container" class="relative h-40 w-full mt-4">
+                    <!-- 背景のグリッド線 -->
+                    <div class="absolute inset-0 flex flex-col justify-between text-xs text-gray-300">
+                        <div class="border-b border-gray-100 w-full">100</div>
+                        <!-- 標準ライン -->
+                        <div id="graph-baseline-line" class="border-b-2 border-dashed border-gray-400 w-full absolute z-0" style="bottom: 50%; opacity: 0.5;"></div>
+                        <div class="border-b border-gray-100 w-full">0</div>
+                    </div>
+                    
+                    <!-- SVGグラフ -->
+                    <svg id="history-chart" class="absolute inset-0 w-full h-full overflow-visible z-10">
+                        <!-- JSで描画 -->
+                    </svg>
+                    <p id="graph-baseline-label" class="text-[10px] text-gray-500 bg-white px-1 absolute right-0 -bottom-4 z-20">点線: 現在の標準 (50)</p>
+                    
+                    <div id="no-data-msg" class="absolute inset-0 flex items-center justify-center text-gray-400 text-sm bg-gray-50 rounded-lg border border-dashed border-gray-200 hidden">
+                        データが2件以上あるとグラフが表示されます
+                    </div>
+                </div>
+            </div>
+
+            <!-- 履歴リスト -->
+            <div class="space-y-3">
+                <h2 class="text-lg font-bold flex items-center text-gray-800 px-1">
+                    <i data-lucide="history" class="mr-2 text-gray-500" width="20" height="20"></i>
+                    過去の記録
+                </h2>
+                
+                <div id="history-list" class="space-y-3">
+                    <!-- JSでリスト生成 -->
+                </div>
+                <p id="history-empty-msg" class="text-center text-gray-400 py-8 hidden">まだ記録がありません。</p>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // --- 設定・状態 ---
+        let state = {
+            mood: 3,
+            energy: 3,
+            stress: 3,
+            sleep: 3
+        };
+        
+        let baseline = {
+            mood: 3,
+            energy: 3,
+            stress: 3,
+            sleep: 3
+        };
+
+        let historyData = [];
+
+        // --- 定数・ユーティリティ ---
+        const ITEMS = [
+            { key: 'mood', label: '気分', icon: 'smile', colorClass: 'text-orange-500', baseColor: 'bg-orange-500' },
+            { key: 'energy', label: '体の元気', icon: 'zap', colorClass: 'text-yellow-500', baseColor: 'bg-yellow-500' },
+            { key: 'sleep', label: '睡眠の質', icon: 'moon', colorClass: 'text-purple-500', baseColor: 'bg-purple-500' },
+            { key: 'stress', label: 'ストレス度', icon: 'heart', colorClass: 'text-red-500', baseColor: 'bg-red-500' }
+        ];
+
+        // --- ロジック ---
+
+        function getScoreColor(score) {
+            if (score >= 80) return 'text-green-500 bg-green-50 border-green-200';
+            if (score >= 60) return 'text-teal-500 bg-teal-50 border-teal-200';
+            if (score >= 40) return 'text-yellow-500 bg-yellow-50 border-yellow-200';
+            if (score >= 20) return 'text-orange-500 bg-orange-50 border-orange-200';
+            return 'text-red-500 bg-red-50 border-red-200';
+        }
+
+        function getProgressBarColor(score) {
+            if (score >= 80) return 'bg-green-500';
+            if (score >= 60) return 'bg-teal-500';
+            if (score >= 40) return 'bg-yellow-500';
+            if (score >= 20) return 'bg-orange-500';
+            return 'bg-red-500';
+        }
+
+        function getAdvice(score, diff, stress) {
+            if (diff >= 15) return "絶好調ですね！いつもよりエネルギーに満ちています。";
+            if (diff >= 5) return "いつもより少し調子が良いようです。良い一日になりそう。";
+            if (Math.abs(diff) < 5) return "いつも通りの安定した状態です。マイペースでいきましょう。";
+            if (diff <= -15) return "いつもよりかなりお疲れのようです。無理せず休息を最優先に。";
+            if (diff <= -5) return "いつもより少し元気が足りないかも。早めの睡眠を心がけて。";
+            return "無理せず、自分のペースで過ごしましょう。";
+        }
+
+        function getFace(score) {
+            if (score >= 80) return "😆";
+            if (score >= 60) return "🙂";
+            if (score >= 40) return "😐";
+            if (score >= 20) return "😰";
+            return "😵";
+        }
+
+        function calculateScore(mood, energy, sleep, stress) {
+            // ((mood + energy + sleep - stress + 2) / 16) * 100
+            let calc = ((mood + energy + sleep - stress + 2) / 16) * 100;
+            return Math.round(Math.max(0, Math.min(100, calc)));
+        }
+
+        // --- UI構築用関数 ---
+
+        function createLevelSelectorHTML(item, value, onChangeName, isSettings = false) {
+            const prefix = isSettings ? 'setting' : 'input';
+            let buttonsHtml = '';
+            for (let i = 1; i <= 5; i++) {
+                const isSelected = value === i;
+                const activeClass = isSelected 
+                    ? `${item.baseColor} text-white shadow-md scale-105` 
+                    : 'bg-gray-100 text-gray-400 hover:bg-gray-200';
+                
+                buttonsHtml += `
+                    <button onclick="${onChangeName}('${item.key}', ${i})"
+                        class="flex-1 h-12 rounded-xl font-bold text-lg transition-all duration-200 transform active:scale-95 ${activeClass}">
+                        ${i}
+                    </button>
+                `;
+            }
+
+            return `
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-3">
+                        <label class="flex items-center font-bold text-gray-700">
+                            <i data-lucide="${item.icon}" class="mr-2 ${item.colorClass}" width="20" height="20"></i>
+                            ${isSettings ? 'いつもの' : ''}${item.label}
+                        </label>
+                        <span class="text-sm font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                            ${value}
+                        </span>
+                    </div>
+                    <div class="flex justify-between gap-2">
+                        ${buttonsHtml}
+                    </div>
+                    <div class="flex justify-between text-xs text-gray-400 mt-1 px-1">
+                        <span>低い/悪い</span>
+                        <span>高い/良い</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- 操作・更新処理 ---
+
+        function updateState(key, value) {
+            state[key] = value;
+            renderApp();
+        }
+
+        let tempBaseline = { ...baseline };
+        function updateTempBaseline(key, value) {
+            tempBaseline[key] = value;
+            renderSettingsForm();
+        }
+
+        function toggleSettings(show) {
+            const modal = document.getElementById('settings-modal');
+            if (show) {
+                tempBaseline = { ...baseline }; // Reset temp
+                renderSettingsForm();
+                modal.classList.remove('hidden');
+                modal.classList.add('animate-fade-in');
+            } else {
+                modal.classList.add('hidden');
+                modal.classList.remove('animate-fade-in');
+            }
+        }
+
+        function saveBaselineSettings() {
+            baseline = { ...tempBaseline };
+            localStorage.setItem('my_condition_settings', JSON.stringify(baseline));
+            toggleSettings(false);
+            showNotification('標準値を更新しました');
+            renderApp();
+        }
+
+        function saveCurrentState() {
+            const currentScore = calculateScore(state.mood, state.energy, state.sleep, state.stress);
+            const baselineScore = calculateScore(baseline.mood, baseline.energy, baseline.sleep, baseline.stress);
+            const scoreDiff = currentScore - baselineScore;
+
+            const newEntry = {
+                id: Date.now(),
+                date: new Date().toISOString(),
+                score: currentScore,
+                details: { ...state },
+                baselineDiff: scoreDiff,
+                baselineScore: baselineScore
+            };
+
+            historyData = [newEntry, ...historyData];
+            localStorage.setItem('my_condition_data', JSON.stringify(historyData));
+            showNotification('記録しました！');
+            renderApp(); // 履歴などの更新のため
+        }
+
+        function deleteHistory(id) {
+            historyData = historyData.filter(item => item.id !== id);
+            localStorage.setItem('my_condition_data', JSON.stringify(historyData));
+            renderHistoryList();
+            renderGraph();
+        }
+
+        function switchTab(tabName) {
+            const inputBtn = document.getElementById('tab-input');
+            const historyBtn = document.getElementById('tab-history');
+            const inputContent = document.getElementById('content-input');
+            const historyContent = document.getElementById('content-history');
+
+            if (tabName === 'input') {
+                inputBtn.className = 'flex-1 py-2 text-sm font-bold rounded-lg transition-all bg-white shadow text-blue-600';
+                historyBtn.className = 'flex-1 py-2 text-sm font-bold rounded-lg transition-all text-gray-500 hover:text-gray-700';
+                inputContent.classList.remove('hidden');
+                historyContent.classList.add('hidden');
+            } else {
+                historyBtn.className = 'flex-1 py-2 text-sm font-bold rounded-lg transition-all bg-white shadow text-blue-600';
+                inputBtn.className = 'flex-1 py-2 text-sm font-bold rounded-lg transition-all text-gray-500 hover:text-gray-700';
+                historyContent.classList.remove('hidden');
+                inputContent.classList.add('hidden');
+                renderGraph(); // タブ切り替え時にグラフ再描画
+            }
+        }
+
+        function showNotification(msg) {
+            const notif = document.getElementById('notification');
+            const text = document.getElementById('notification-text');
+            text.textContent = msg;
+            notif.classList.remove('hidden');
+            notif.classList.add('animate-fade-in-down');
+            
+            setTimeout(() => {
+                notif.classList.add('hidden');
+                notif.classList.remove('animate-fade-in-down');
+            }, 3000);
+        }
+
+        function formatDate(isoString) {
+            const d = new Date(isoString);
+            return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+        }
+
+        // --- 描画関数群 ---
+
+        function renderSettingsForm() {
+            const container = document.getElementById('settings-form');
+            container.innerHTML = ITEMS.map(item => 
+                createLevelSelectorHTML(item, tempBaseline[item.key], 'updateTempBaseline', true)
+            ).join('');
+            lucide.createIcons();
+        }
+
+        function renderHistoryList() {
+            const listContainer = document.getElementById('history-list');
+            const emptyMsg = document.getElementById('history-empty-msg');
+
+            if (historyData.length === 0) {
+                listContainer.innerHTML = '';
+                emptyMsg.classList.remove('hidden');
+                return;
+            }
+            emptyMsg.classList.add('hidden');
+
+            listContainer.innerHTML = historyData.map(item => {
+                const colorClass = getProgressBarColor(item.score);
+                let diffBadge = '';
+                if (item.baselineDiff !== undefined) {
+                    const diffClass = item.baselineDiff > 0 ? 'bg-green-100 text-green-700' : 
+                                    item.baselineDiff < 0 ? 'bg-red-100 text-red-700' : 
+                                    'bg-gray-100 text-gray-600';
+                    const sign = item.baselineDiff > 0 ? '+' : '';
+                    diffBadge = `<span class="text-xs px-1.5 py-0.5 rounded font-bold ${diffClass}">${sign}${item.baselineDiff}</span>`;
+                }
+
+                return `
+                <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center transition-transform hover:translate-x-1">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold text-white ${colorClass}">
+                            ${item.score}
+                        </div>
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <p class="text-sm font-semibold text-gray-700">${formatDate(item.date)}</p>
+                                ${diffBadge}
+                            </div>
+                            <div class="flex space-x-3 mt-1 text-xs text-gray-500">
+                                <span class="flex items-center"><i data-lucide="smile" width="10" class="mr-1"></i>${item.details.mood}</span>
+                                <span class="flex items-center"><i data-lucide="zap" width="10" class="mr-1"></i>${item.details.energy}</span>
+                                <span class="flex items-center"><i data-lucide="moon" width="10" class="mr-1"></i>${item.details.sleep}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="deleteHistory(${item.id})" class="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors">
+                        <i data-lucide="trash-2" width="16" height="16"></i>
+                    </button>
+                </div>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function renderGraph() {
+            const svg = document.getElementById('history-chart');
+            const noDataMsg = document.getElementById('no-data-msg');
+            const baselineLine = document.getElementById('graph-baseline-line');
+            const baselineLabel = document.getElementById('graph-baseline-label');
+
+            // Baseline Line Update
+            const baselineScore = calculateScore(baseline.mood, baseline.energy, baseline.sleep, baseline.stress);
+            baselineLine.style.bottom = `${baselineScore}%`;
+            baselineLabel.textContent = `点線: 現在の標準 (${baselineScore})`;
+
+            if (historyData.length < 2) {
+                svg.innerHTML = '';
+                noDataMsg.classList.remove('hidden');
+                return;
+            }
+            noDataMsg.classList.add('hidden');
+
+            const width = 350; // SVGのviewBoxや親コンテナに依存（仮想幅）
+            const height = 160;
+            const chartData = [...historyData].slice(0, 10).reverse();
+            const stepX = width / (chartData.length - 1);
+
+            // Path生成
+            const points = chartData.map((item, index) => {
+                const x = index * stepX;
+                const y = height - (item.score / 100) * height;
+                return `${x},${y}`;
+            });
+            const d = `M ${points.join(" L ")}`;
+
+            // Points生成
+            const circles = chartData.map((item, index) => {
+                const x = index * stepX;
+                const y = height - (item.score / 100) * height;
+                return `<circle cx="${x}" cy="${y}" r="4" fill="white" stroke="#3B82F6" stroke-width="2"></circle>`;
+            }).join('');
+
+            svg.innerHTML = `
+                <path d="${d}" fill="none" stroke="#3B82F6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="drop-shadow-sm"></path>
+                ${circles}
+            `;
+        }
+
+        function renderApp() {
+            // 計算
+            const currentScore = calculateScore(state.mood, state.energy, state.sleep, state.stress);
+            const baselineScore = calculateScore(baseline.mood, baseline.energy, baseline.sleep, baseline.stress);
+            const scoreDiff = currentScore - baselineScore;
+
+            // DOM要素取得
+            const scoreCard = document.getElementById('score-card');
+            const displayCurrent = document.getElementById('display-current-score');
+            const displayBaseline = document.getElementById('display-baseline-score');
+            const displayFace = document.getElementById('display-face');
+            const scoreBar = document.getElementById('score-bar');
+            const baselineMarker = document.getElementById('baseline-marker');
+            const adviceText = document.getElementById('advice-text');
+            const scoreDiffBadge = document.getElementById('score-diff-badge');
+            const scoreDiffText = document.getElementById('score-diff-text');
+            const diffIconContainer = document.getElementById('diff-icon-container');
+            const formBaselineScore = document.getElementById('form-baseline-score');
+            const mainInputForm = document.getElementById('main-input-form');
+
+            // 色クラス更新
+            const themeClass = getScoreColor(currentScore);
+            // 既存のクラスを削除して新しいクラスを追加（Tailwindのクラス競合を避ける簡易実装）
+            scoreCard.className = `relative overflow-hidden rounded-3xl p-6 shadow-sm border transition-colors duration-500 ${themeClass}`;
+
+            // 値の反映
+            displayCurrent.textContent = currentScore;
+            displayBaseline.textContent = baselineScore;
+            formBaselineScore.textContent = baselineScore;
+            displayFace.textContent = getFace(currentScore);
+            scoreBar.style.width = `${currentScore}%`;
+            scoreBar.className = `absolute top-0 left-0 h-full transition-all duration-500 ease-out ${getProgressBarColor(currentScore)}`;
+            baselineMarker.style.left = `${baselineScore}%`;
+            adviceText.textContent = getAdvice(currentScore, scoreDiff, state.stress);
+
+            // バッジのスタイルとテキスト
+            let badgeClass = 'bg-gray-100/80 text-gray-700';
+            let diffText = 'いつも通り (±0)';
+            let iconName = 'check-circle';
+
+            if (scoreDiff > 0) {
+                badgeClass = 'bg-green-100/80 text-green-800';
+                diffText = `いつもより良い (+${scoreDiff})`;
+                iconName = 'trending-up';
+            } else if (scoreDiff < 0) {
+                badgeClass = 'bg-red-100/80 text-red-800';
+                diffText = `いつもより悪い (${scoreDiff})`;
+                iconName = 'alert-circle';
+            }
+            scoreDiffBadge.className = `inline-flex items-center px-4 py-1.5 rounded-full font-bold shadow-sm backdrop-blur-md border border-white/60 ${badgeClass}`;
+            scoreDiffText.textContent = diffText;
+            
+            // アイコン更新 (LucideはDOM書き換えが必要)
+            diffIconContainer.innerHTML = `<i data-lucide="${iconName}" width="16" height="16"></i>`;
+
+            // 入力フォーム再描画
+            mainInputForm.innerHTML = ITEMS.map(item => 
+                createLevelSelectorHTML(item, state[item.key], 'updateState')
+            ).join('');
+
+            // 履歴リスト更新
+            renderHistoryList();
+
+            // アイコン再スキャン
+            lucide.createIcons();
+        }
+
+        // --- 初期化 ---
+        window.onload = function() {
+            // ロード
+            const savedData = localStorage.getItem('my_condition_data');
+            if (savedData) {
+                historyData = JSON.parse(savedData);
+            }
+            
+            const savedSettings = localStorage.getItem('my_condition_settings');
+            if (savedSettings) {
+                baseline = JSON.parse(savedSettings);
+                // 初回は現在値を標準値に合わせる（UX維持）
+                state = { ...baseline };
+            }
+
+            // 初回描画
+            renderApp();
+            renderGraph();
+        };
+
+    </script>
+</body>
+</html>
