@@ -2,8 +2,8 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyCondition - 体調・気分可視化</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MyCondition</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
@@ -13,6 +13,8 @@
         
         body {
             font-family: 'Noto Sans JP', sans-serif;
+            /* iOSでのセーフエリア対応 */
+            padding-bottom: env(safe-area-inset-bottom);
         }
 
         /* アニメーション定義 */
@@ -60,15 +62,17 @@
     <main class="max-w-md mx-auto px-4 py-6 space-y-6">
         
         <!-- 通知 -->
-        <div id="notification" class="fixed top-24 left-1/2 transform -translate-x-1/2 bg-gray-800/90 backdrop-blur text-white px-6 py-3 rounded-full shadow-lg z-50 transition-all hidden flex items-center">
-            <i data-lucide="check-circle" class="mr-2 text-green-400" width="18" height="18"></i>
-            <span id="notification-text">記録しました！</span>
+        <div id="notification" class="fixed top-24 left-1/2 transform -translate-x-1/2 bg-gray-800/90 backdrop-blur text-white px-6 py-3 rounded-full shadow-lg z-50 transition-all hidden flex items-center w-max max-w-[90%] justify-center">
+            <i data-lucide="check-circle" class="mr-2 text-green-400 flex-shrink-0" width="18" height="18"></i>
+            <span id="notification-text" class="text-sm font-medium">記録しました！</span>
         </div>
 
         <!-- 設定モーダル -->
+        <!-- z-50とsafe-area考慮のマージン調整 -->
         <div id="settings-modal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm hidden animate-fade-in">
-            <div class="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-                <div class="flex justify-between items-center mb-2">
+            <!-- max-h-[85vh]に変更して上下に余裕を持たせる -->
+            <div class="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl max-h-[85vh] overflow-y-auto relative flex flex-col">
+                <div class="flex justify-between items-center mb-2 flex-shrink-0">
                     <h3 class="text-xl font-bold text-gray-800 flex items-center">
                         <i data-lucide="settings" class="mr-2 text-blue-600" width="24" height="24"></i>
                         標準値の設定
@@ -78,25 +82,27 @@
                     </button>
                 </div>
                 
-                <div class="bg-blue-50 p-4 rounded-xl mb-6 flex items-start">
-                    <i data-lucide="info" class="text-blue-600 mr-2 flex-shrink-0 mt-0.5" width="20" height="20"></i>
-                    <p class="text-sm text-blue-800">
-                        あなたの「いつもの状態」を設定してください。これを基準（50点相当）として、日々の変化を表示します。
-                    </p>
+                <div class="flex-grow overflow-y-auto no-scrollbar">
+                    <div class="bg-blue-50 p-4 rounded-xl mb-6 flex items-start">
+                        <i data-lucide="info" class="text-blue-600 mr-2 flex-shrink-0 mt-0.5" width="20" height="20"></i>
+                        <p class="text-sm text-blue-800">
+                            あなたの「いつもの状態」を設定してください。これを基準（50点相当）として、日々の変化を表示します。
+                        </p>
+                    </div>
+
+                    <!-- 設定フォーム -->
+                    <div id="settings-form">
+                        <!-- JSでレンダリング -->
+                    </div>
                 </div>
 
-                <!-- 設定フォーム -->
-                <div id="settings-form">
-                    <!-- JSでレンダリング -->
-                </div>
-
-                <div class="mt-8 flex space-x-3">
+                <div class="mt-6 flex space-x-3 flex-shrink-0 pt-2 bg-white sticky bottom-0">
                     <button onclick="toggleSettings(false)" class="flex-1 py-3 border-2 border-gray-200 rounded-xl font-bold text-gray-500 hover:bg-gray-50 transition-colors">
                         キャンセル
                     </button>
                     <button onclick="saveBaselineSettings()" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 hover:shadow-xl transition-all flex items-center justify-center transform active:scale-95">
                         <i data-lucide="check-circle" class="mr-2" width="18" height="18"></i>
-                        設定を保存
+                        保存
                     </button>
                 </div>
             </div>
@@ -201,7 +207,7 @@
         <!-- 履歴タブコンテンツ -->
         <div id="content-history" class="space-y-6 animate-fade-in hidden">
             <!-- グラフエリア -->
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 overflow-hidden">
                 <h2 class="text-lg font-bold mb-4 flex items-center text-gray-800">
                     <i data-lucide="trending-up" class="mr-2 text-blue-500" width="20" height="20"></i>
                     調子の推移 (最新10件)
@@ -212,12 +218,12 @@
                     <div class="absolute inset-0 flex flex-col justify-between text-xs text-gray-300">
                         <div class="border-b border-gray-100 w-full">100</div>
                         <!-- 標準ライン -->
-                        <div id="graph-baseline-line" class="border-b-2 border-dashed border-gray-400 w-full absolute z-0" style="bottom: 50%; opacity: 0.5;"></div>
+                        <div id="graph-baseline-line" class="border-b-2 border-dashed border-gray-400 w-full absolute z-0 transition-all duration-300" style="bottom: 50%; opacity: 0.5;"></div>
                         <div class="border-b border-gray-100 w-full">0</div>
                     </div>
                     
                     <!-- SVGグラフ -->
-                    <svg id="history-chart" class="absolute inset-0 w-full h-full overflow-visible z-10">
+                    <svg id="history-chart" class="absolute inset-0 w-full h-full overflow-visible z-10" preserveAspectRatio="none">
                         <!-- JSで描画 -->
                     </svg>
                     <p id="graph-baseline-label" class="text-[10px] text-gray-500 bg-white px-1 absolute right-0 -bottom-4 z-20">点線: 現在の標準 (50)</p>
@@ -306,7 +312,6 @@
         }
 
         function calculateScore(mood, energy, sleep, stress) {
-            // ((mood + energy + sleep - stress + 2) / 16) * 100
             let calc = ((mood + energy + sleep - stress + 2) / 16) * 100;
             return Math.round(Math.max(0, Math.min(100, calc)));
         }
@@ -403,7 +408,7 @@
             historyData = [newEntry, ...historyData];
             localStorage.setItem('my_condition_data', JSON.stringify(historyData));
             showNotification('記録しました！');
-            renderApp(); // 履歴などの更新のため
+            renderApp();
         }
 
         function deleteHistory(id) {
@@ -429,7 +434,7 @@
                 inputBtn.className = 'flex-1 py-2 text-sm font-bold rounded-lg transition-all text-gray-500 hover:text-gray-700';
                 historyContent.classList.remove('hidden');
                 inputContent.classList.add('hidden');
-                renderGraph(); // タブ切り替え時にグラフ再描画
+                renderGraph();
             }
         }
 
@@ -528,23 +533,42 @@
             }
             noDataMsg.classList.add('hidden');
 
-            const width = 350; // SVGのviewBoxや親コンテナに依存（仮想幅）
+            // 修正: SVGのviewBoxとパディング計算
+            // width, heightは内部座標系として固定値を使用するが、
+            // HTML側のSVGタグにpreserveAspectRatio="none"をつけることで
+            // コンテナに合わせて伸縮させる
+            const width = 350;
             const height = 160;
+            const paddingX = 10; // 左右の余白
+            const paddingY = 10; // 上下の余白
+
+            // SVGの設定を更新
+            svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+            // 注意: preserveAspectRatio="none" は横幅の変化に対してグラフを伸縮させる
+            // アスペクト比を維持したい場合は "xMidYMid meet" などにするが
+            // 今回は領域全体を使うためにnoneが適している
+
+            // データ準備
             const chartData = [...historyData].slice(0, 10).reverse();
-            const stepX = width / (chartData.length - 1);
+            
+            // 描画エリアの計算
+            const drawWidth = width - (paddingX * 2);
+            const drawHeight = height - (paddingY * 2);
+            
+            const stepX = drawWidth / (chartData.length - 1);
 
             // Path生成
             const points = chartData.map((item, index) => {
-                const x = index * stepX;
-                const y = height - (item.score / 100) * height;
+                const x = paddingX + (index * stepX);
+                const y = paddingY + (drawHeight - (item.score / 100) * drawHeight);
                 return `${x},${y}`;
             });
             const d = `M ${points.join(" L ")}`;
 
             // Points生成
             const circles = chartData.map((item, index) => {
-                const x = index * stepX;
-                const y = height - (item.score / 100) * height;
+                const x = paddingX + (index * stepX);
+                const y = paddingY + (drawHeight - (item.score / 100) * drawHeight);
                 return `<circle cx="${x}" cy="${y}" r="4" fill="white" stroke="#3B82F6" stroke-width="2"></circle>`;
             }).join('');
 
@@ -576,7 +600,6 @@
 
             // 色クラス更新
             const themeClass = getScoreColor(currentScore);
-            // 既存のクラスを削除して新しいクラスを追加（Tailwindのクラス競合を避ける簡易実装）
             scoreCard.className = `relative overflow-hidden rounded-3xl p-6 shadow-sm border transition-colors duration-500 ${themeClass}`;
 
             // 値の反映
@@ -606,7 +629,7 @@
             scoreDiffBadge.className = `inline-flex items-center px-4 py-1.5 rounded-full font-bold shadow-sm backdrop-blur-md border border-white/60 ${badgeClass}`;
             scoreDiffText.textContent = diffText;
             
-            // アイコン更新 (LucideはDOM書き換えが必要)
+            // アイコン更新
             diffIconContainer.innerHTML = `<i data-lucide="${iconName}" width="16" height="16"></i>`;
 
             // 入力フォーム再描画
@@ -632,7 +655,6 @@
             const savedSettings = localStorage.getItem('my_condition_settings');
             if (savedSettings) {
                 baseline = JSON.parse(savedSettings);
-                // 初回は現在値を標準値に合わせる（UX維持）
                 state = { ...baseline };
             }
 
