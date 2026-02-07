@@ -68,9 +68,7 @@
         </div>
 
         <!-- 設定モーダル -->
-        <!-- z-50とsafe-area考慮のマージン調整 -->
         <div id="settings-modal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm hidden animate-fade-in">
-            <!-- max-h-[85vh]に変更して上下に余裕を持たせる -->
             <div class="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl max-h-[85vh] overflow-y-auto relative flex flex-col">
                 <div class="flex justify-between items-center mb-2 flex-shrink-0">
                     <h3 class="text-xl font-bold text-gray-800 flex items-center">
@@ -452,7 +450,9 @@
         }
 
         function formatDate(isoString) {
+            // [Fix] 無効な日付のチェック
             const d = new Date(isoString);
+            if (isNaN(d.getTime())) return "日付不明";
             return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
         }
 
@@ -488,6 +488,9 @@
                     diffBadge = `<span class="text-xs px-1.5 py-0.5 rounded font-bold ${diffClass}">${sign}${item.baselineDiff}</span>`;
                 }
 
+                // [Fix] detailsが存在しない場合のフォールバック（古いデータ互換性）
+                const details = item.details || { mood: '-', energy: '-', sleep: '-' };
+                
                 return `
                 <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center transition-transform hover:translate-x-1">
                     <div class="flex items-center space-x-4">
@@ -500,9 +503,9 @@
                                 ${diffBadge}
                             </div>
                             <div class="flex space-x-3 mt-1 text-xs text-gray-500">
-                                <span class="flex items-center"><i data-lucide="smile" width="10" class="mr-1"></i>${item.details.mood}</span>
-                                <span class="flex items-center"><i data-lucide="zap" width="10" class="mr-1"></i>${item.details.energy}</span>
-                                <span class="flex items-center"><i data-lucide="moon" width="10" class="mr-1"></i>${item.details.sleep}</span>
+                                <span class="flex items-center"><i data-lucide="smile" width="10" class="mr-1"></i>${details.mood || '-'}</span>
+                                <span class="flex items-center"><i data-lucide="zap" width="10" class="mr-1"></i>${details.energy || '-'}</span>
+                                <span class="flex items-center"><i data-lucide="moon" width="10" class="mr-1"></i>${details.sleep || '-'}</span>
                             </div>
                         </div>
                     </div>
@@ -533,31 +536,20 @@
             }
             noDataMsg.classList.add('hidden');
 
-            // 修正: SVGのviewBoxとパディング計算
-            // width, heightは内部座標系として固定値を使用するが、
-            // HTML側のSVGタグにpreserveAspectRatio="none"をつけることで
-            // コンテナに合わせて伸縮させる
             const width = 350;
             const height = 160;
-            const paddingX = 10; // 左右の余白
-            const paddingY = 10; // 上下の余白
+            const paddingX = 10; 
+            const paddingY = 10; 
 
-            // SVGの設定を更新
             svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-            // 注意: preserveAspectRatio="none" は横幅の変化に対してグラフを伸縮させる
-            // アスペクト比を維持したい場合は "xMidYMid meet" などにするが
-            // 今回は領域全体を使うためにnoneが適している
 
-            // データ準備
             const chartData = [...historyData].slice(0, 10).reverse();
             
-            // 描画エリアの計算
             const drawWidth = width - (paddingX * 2);
             const drawHeight = height - (paddingY * 2);
             
             const stepX = drawWidth / (chartData.length - 1);
 
-            // Path生成
             const points = chartData.map((item, index) => {
                 const x = paddingX + (index * stepX);
                 const y = paddingY + (drawHeight - (item.score / 100) * drawHeight);
@@ -565,7 +557,6 @@
             });
             const d = `M ${points.join(" L ")}`;
 
-            // Points生成
             const circles = chartData.map((item, index) => {
                 const x = paddingX + (index * stepX);
                 const y = paddingY + (drawHeight - (item.score / 100) * drawHeight);
@@ -646,16 +637,25 @@
 
         // --- 初期化 ---
         window.onload = function() {
-            // ロード
-            const savedData = localStorage.getItem('my_condition_data');
-            if (savedData) {
-                historyData = JSON.parse(savedData);
+            // [Fix] データ読み込み時のエラーハンドリング
+            try {
+                const savedData = localStorage.getItem('my_condition_data');
+                if (savedData) {
+                    historyData = JSON.parse(savedData);
+                }
+            } catch (e) {
+                console.error("データの読み込みに失敗しました", e);
+                historyData = [];
             }
             
-            const savedSettings = localStorage.getItem('my_condition_settings');
-            if (savedSettings) {
-                baseline = JSON.parse(savedSettings);
-                state = { ...baseline };
+            try {
+                const savedSettings = localStorage.getItem('my_condition_settings');
+                if (savedSettings) {
+                    baseline = JSON.parse(savedSettings);
+                    state = { ...baseline };
+                }
+            } catch (e) {
+                console.error("設定の読み込みに失敗しました", e);
             }
 
             // 初回描画
