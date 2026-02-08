@@ -274,6 +274,9 @@
             { key: 'stress', label: 'ストレス度', icon: 'heart', colorClass: 'text-red-500', baseColor: 'bg-red-500' }
         ];
 
+        // FACES配列は getRelativeFace で直接返すため使用しませんが、参照用に残します
+        const FACES = ["😵", "😰", "😐", "🙂", "😆"]; 
+
         // --- ロジック ---
 
         function getScoreColor(score) {
@@ -301,12 +304,30 @@
             return "無理せず、自分のペースで過ごしましょう。";
         }
 
-        function getFace(score) {
-            if (score >= 80) return "😆";
-            if (score >= 60) return "🙂";
-            if (score >= 40) return "😐";
-            if (score >= 20) return "😰";
-            return "😵";
+        // 顔文字決定ロジック（標準値を基準に変動させる）
+        function getRelativeFace(currentScore, baselineScore) {
+            // 絶対評価ではなく、標準値との「差分」だけで表情を決める
+            const diff = currentScore - baselineScore;
+            
+            // 1項目の変化(1段階) = 100/16 ≈ 6.25点
+            // 2段階変化 = 12.5点
+            // 3段階変化 = 18.75点
+            
+            // 3段階以上上がると (約+18点以上) -> 😆
+            if (diff >= 18) return "😆";
+            
+            // 標準〜2段階未満 (約-6点 〜 +18点未満) -> 🙂
+            // (+18未満は標準扱いまたは特に指定なしのため🙂)
+            if (diff > -6) return "🙂";
+            
+            // 1段階落ちると (約-6点以下 〜 -12点より大きい) -> 😔
+            if (diff > -12) return "😔";
+            
+            // 2段階落ちると (約-12点以下 〜 -18点より大きい) -> 😰
+            if (diff > -18) return "😰";
+            
+            // 3段階以上落ちると (約-18点以下) -> 😫
+            return "😫";
         }
 
         function calculateScore(mood, energy, sleep, stress) {
@@ -450,7 +471,6 @@
         }
 
         function formatDate(isoString) {
-            // [Fix] 無効な日付のチェック
             const d = new Date(isoString);
             if (isNaN(d.getTime())) return "日付不明";
             return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -488,8 +508,7 @@
                     diffBadge = `<span class="text-xs px-1.5 py-0.5 rounded font-bold ${diffClass}">${sign}${item.baselineDiff}</span>`;
                 }
 
-                // [Fix] detailsが存在しない場合のフォールバック（古いデータ互換性）
-                const details = item.details || { mood: '-', energy: '-', sleep: '-' };
+                const details = item.details || { mood: '-', energy: '-', sleep: '-', stress: '-' };
                 
                 return `
                 <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center transition-transform hover:translate-x-1">
@@ -506,6 +525,7 @@
                                 <span class="flex items-center"><i data-lucide="smile" width="10" class="mr-1"></i>${details.mood || '-'}</span>
                                 <span class="flex items-center"><i data-lucide="zap" width="10" class="mr-1"></i>${details.energy || '-'}</span>
                                 <span class="flex items-center"><i data-lucide="moon" width="10" class="mr-1"></i>${details.sleep || '-'}</span>
+                                <span class="flex items-center"><i data-lucide="heart" width="10" class="mr-1"></i>${details.stress || '-'}</span>
                             </div>
                         </div>
                     </div>
@@ -597,7 +617,10 @@
             displayCurrent.textContent = currentScore;
             displayBaseline.textContent = baselineScore;
             formBaselineScore.textContent = baselineScore;
-            displayFace.textContent = getFace(currentScore);
+            
+            // 【変更点】顔文字を標準値基準の相対評価で取得
+            displayFace.textContent = getRelativeFace(currentScore, baselineScore);
+            
             scoreBar.style.width = `${currentScore}%`;
             scoreBar.className = `absolute top-0 left-0 h-full transition-all duration-500 ease-out ${getProgressBarColor(currentScore)}`;
             baselineMarker.style.left = `${baselineScore}%`;
@@ -637,7 +660,6 @@
 
         // --- 初期化 ---
         window.onload = function() {
-            // [Fix] データ読み込み時のエラーハンドリング
             try {
                 const savedData = localStorage.getItem('my_condition_data');
                 if (savedData) {
